@@ -5,13 +5,11 @@
 
 
 const float  a2 = 6; // joint length 1
-const float  a4 = 5.5;// joint length 2
-
+//const float  a4 = 5.5;// joint length 2
+const float  a4 = 5;
 float Theta1(float angle)
 {
-	angle = (angle/3.14159)*180;
-	if(angle<0)
-			  angle = angle+180;
+
 	float  value;
 	  int minC=1600;
 	  int maxC=7800;
@@ -21,6 +19,20 @@ float Theta1(float angle)
 	  return value;
 }
 
+float Theta1DEGREE(float angle)
+{
+
+	//if(angle<=0)
+		//	  angle = angle+180;
+
+	float  value;
+	  int minC=1600;
+	  int maxC=7800;
+	  int minA=0;
+	  int maxA=180;
+	  value = ((maxC-minC)/(maxA-minA))*(angle-minA)+minC;
+	  return value;
+}
 float Theta2(float angle)
 {
 	angle = (angle/3.14159)*180;
@@ -33,6 +45,20 @@ float Theta2(float angle)
 
 	  return value;
 }
+
+float Theta2DEGREE(float angle)
+{
+
+	float  value;
+	  int minC=1600;
+	  int maxC=7800;
+	  int minA=-90;
+	  int maxA=90;
+	  value = ((maxC-minC)/(maxA-minA))*(angle-minA)+minC;
+
+	  return value;
+}
+
 
 float Theta3(float angle)
 {
@@ -58,6 +84,11 @@ void InverseKinematics(float X, float Y,servo *obiekt)//odwrotna kinematyka dla 
 	  T1 = phi2-phi1;
 	  phi3 = acos(((r*r)-(a2*a2)-(a4*a4))/(-2.0*a2*a4));
 	  T2 = 3.14159-phi3;
+
+	  T1 = (T1/3.14159)*180;
+	  	if(X<0) T1 = T1+180;
+
+
 	  obiekt->servo1 = T1;
 	  obiekt->servo2 = T2;
 
