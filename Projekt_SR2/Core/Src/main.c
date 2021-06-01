@@ -33,10 +33,12 @@
 /* USER CODE BEGIN PTD */
 uint8_t Received;
 int cpr1,cpr2,cpr3,cpr4;
-uint8_t rxBuf[50];
+uint8_t rxBuf[21];
 uint8_t buffer[50];
 int data[3];
 float Data[3];
+char id;
+uint8_t flaga = 0;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -81,7 +83,29 @@ static void MX_TIM5_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void parse_ReceivedData()
+{
 
+		int x = 0;
+	int init_size = strlen(rxBuf);
+	char delim[] = ",";
+
+	char *ptr = strtok(rxBuf, delim);
+	//ptr = strtok(rxBuf, delim);
+	id = *ptr;
+
+	if (id == 'a') {
+		while (ptr != NULL) {
+			printf("'%s'\n", ptr);
+			ptr = strtok(NULL, delim);
+			Data[x++] = atof(ptr);
+			//sscanf(ptr, "%d", &data[x++]);
+		}
+
+	for(int i=0;i<21;i++) rxBuf[i] = 0;
+
+}
+}
 /* USER CODE END 0 */
 
 /**
@@ -121,7 +145,8 @@ int main(void)
   MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
   printf("Start aplikacji\n\r");
-  HAL_UART_Receive_DMA(&huart2, (uint8_t*)rxBuf, 13);
+  __HAL_UART_FLUSH_DRREGISTER(&huart2);
+  HAL_UART_Receive_DMA(&huart2, (uint8_t*)rxBuf, 21);
   //HAL_UART_Receive_IT(&huart2, &Received, 1);
   HAL_TIM_Encoder_Start_IT(&htim1, TIM_CHANNEL_ALL);
   HAL_TIM_Encoder_Start_IT(&htim3, TIM_CHANNEL_ALL);
@@ -146,49 +171,52 @@ int main(void)
 		//sprintf(buffer, "%c%i %i %i \n", 'A', 7,10, 11);
 		//HAL_UART_Transmit(&huart2, buffer, strlen(buffer), 10);
 		//HAL_Delay(100);
-	  /*__HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_4,29999);
-	  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, 1);
-	  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, 0);
-	  HAL_Delay(3000);
-	  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, 0);
-	  	  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, 1);
-	   HAL_Delay(3000);*/
-	  //cpr1 = (TIM1->CNT);
-	  //cpr2 = (TIM3->CNT);
-	  //cpr3 = (TIM4->CNT);
-	  //cpr4 =(TIM5->CNT);
 
-	 // HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_8);
-		//InverseKinematics(6, 8, &obiekt);
-		//__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, Theta1(obiekt.servo1));
-	  //__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, Theta1(90));
-		//moveServo1(&htim2, Theta1(obiekt.servo1));
-		//moveServo2(&htim2, Theta2(obiekt.servo2));
+		/* HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, 1);
+		 HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, 0);
+		 HAL_Delay(3000);
+		 HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, 0);
+		 HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, 1);
+		 HAL_Delay(3000);*/
+		//cpr1 = (TIM1->CNT);
+		//cpr2 = (TIM3->CNT);
+		//cpr3 = (TIM4->CNT);
+		//cpr4 =(TIM5->CNT);
+	  	  if(flaga == 1)
+	  	  {
+	  		  parse_ReceivedData();
+	  		  flaga = 0;
+	  	  }
+		InverseKinematics(Data[0], Data[1], &obiekt);
+		__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, Theta1(obiekt.servo1));
+		__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, Theta2(obiekt.servo2));
 
-		//__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, Theta2(obiekt.servo2));
-		//HAL_Delay(2000);
+		// __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_4,55000);
+		 //prawo góra forward
+		//HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, 1);
+		//HAL_GPIO_WritePin(GPIOC, GPIO_PIN_8, 0);
+		//prawo góra backward
+		//HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, 0);
+		//HAL_GPIO_WritePin(GPIOC, GPIO_PIN_8, 1);
 
-		//InverseKinematics(0,11.5, &obiekt);
-				//__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, Theta1(obiekt.servo1));
-		//moveServo1(&htim2, Theta1(obiekt.servo1));
-		//moveServo2(&htim2, Theta2(obiekt.servo2));
+		 //lewo góra forward
+		 //HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, 1);
+		 //HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, 0);
+
+		 //lewo góra backward
+		//HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, 0);
+		//HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, 1);
+
+		 //prawo dół forward
+		//HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, 1);
+		//HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, 0);
+
+		//prawo dół backward
+		//HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, 0);
+		//HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, 1);
 
 
-		//__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, Theta2(obiekt.servo2));
-				//HAL_Delay(2000);
-				//InverseKinematics(Data[0],Data[1], &obiekt);
-				InverseKinematics(-6, 8, &obiekt);
-				__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, Theta1(obiekt.servo1));
-				__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, Theta2(obiekt.servo2));
 
-				//__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, Theta1DEGREE(90));
-								//__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, Theta1(obiekt.servo1));
-						//moveServo1(&htim2, Theta1(obiekt.servo1));
-						//moveServo2(&htim2, Theta2(obiekt.servo2));
-
-
-						//__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, Theta2(obiekt.servo2));
-								//HAL_Delay(2000);
 
     /* USER CODE END WHILE */
 
@@ -589,13 +617,16 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-
+	if(huart->Instance == USART2)
+	{
+		/*__HAL_UART_FLUSH_DRREGISTER(&huart2);
 	int x = 0;
 		int init_size = strlen(rxBuf);
 		char delim[] = ",";
 
 		char *ptr = strtok(rxBuf, delim);
-		char id = *ptr;
+		//ptr = strtok(rxBuf, delim);
+		id = *ptr;
 
 		if (id == 'a') {
 			while (ptr != NULL) {
@@ -603,10 +634,8 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 				ptr = strtok(NULL, delim);
 				Data[x++] = atof(ptr);
 				//sscanf(ptr, "%d", &data[x++]);
-
-
 			}
-		}
+		}*/
 //DZIALAJACE PRZESYLANIE INTA
 	/*int x = 0;
 	int init_size = strlen(rxBuf);
@@ -640,12 +669,16 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 	}*/
 	//printf("cos dostalem!");
 
-	x = 0;
+	//x = 0;
 	//DLA INTA
-	//HAL_UART_Receive_DMA(&huart2, (uint8_t*)rxBuf, 7);
+	//HAL_UART_Receive_DMA(&huart2, (uint8_t*)rxBuf, 8);
 
 	//DLA FLOATA
-	HAL_UART_Receive_DMA(&huart2, (uint8_t*)rxBuf, 13);
+	//for(int i=0;i<21;i++) rxBuf[i] = 0;
+		flaga = 1;
+	HAL_UART_Receive_DMA(&huart2, (uint8_t*)rxBuf, 21);
+
+	}
 }
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {

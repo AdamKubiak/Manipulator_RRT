@@ -19,6 +19,8 @@ typedef struct
 float Theta1(float angle);
 float Theta2(float angle);
 float Theta3(float angle);
+float Theta2DEGREE(float angle);
+float Theta1DEGREE(float angle);
 void InverseKinematics(float X, float Y,servo *obiekt);
 
 
