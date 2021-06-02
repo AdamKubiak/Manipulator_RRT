@@ -33,12 +33,16 @@
 /* USER CODE BEGIN PTD */
 uint8_t Received;
 int cpr1,cpr2,cpr3,cpr4;
-uint8_t rxBuf[21];
+uint8_t rxBuf[50];
 uint8_t buffer[50];
 int data[3];
 float Data[3];
-char id;
+char id = 'a';
 uint8_t flaga = 0;
+char TRYB;
+uint8_t flaga_trybu = 0;
+uint8_t move = 0;
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -94,15 +98,17 @@ void parse_ReceivedData()
 	//ptr = strtok(rxBuf, delim);
 	id = *ptr;
 
-	if (id == 'a') {
+	if (id == 'c') {
 		while (ptr != NULL) {
-			printf("'%s'\n", ptr);
+			//printf("'%s'\n", ptr);
 			ptr = strtok(NULL, delim);
 			Data[x++] = atof(ptr);
 			//sscanf(ptr, "%d", &data[x++]);
 		}
 
-	for(int i=0;i<21;i++) rxBuf[i] = 0;
+	for(int i=0;i<50;i++) rxBuf[i] = NULL;
+
+	for(int i=0;i<50;i++) rxBuf[i] = NULL;
 
 }
 }
@@ -146,17 +152,21 @@ int main(void)
   /* USER CODE BEGIN 2 */
   printf("Start aplikacji\n\r");
   __HAL_UART_FLUSH_DRREGISTER(&huart2);
-  HAL_UART_Receive_DMA(&huart2, (uint8_t*)rxBuf, 21);
-  //HAL_UART_Receive_IT(&huart2, &Received, 1);
+  HAL_UART_Receive_IT(&huart2, &TRYB, 1);
+  //HAL_UART_Receive_DMA(&huart2, (uint8_t*)rxBuf, 21);
   HAL_TIM_Encoder_Start_IT(&htim1, TIM_CHANNEL_ALL);
   HAL_TIM_Encoder_Start_IT(&htim3, TIM_CHANNEL_ALL);
   HAL_TIM_Encoder_Start_IT(&htim4, TIM_CHANNEL_ALL);
   HAL_TIM_Encoder_Start_IT(&htim5, TIM_CHANNEL_ALL);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_4);
-  //  __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_4,0);
   servo obiekt;
-   servo_Init(&htim2);
+  manipulator_position position;
+  servo_Init(&htim2);
 
+  //__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3, 700);
+  //moveManipulator(&htim2, Theta1DEGREE(180), Theta2DEGREE(-90), Theta3(180));
+
+  //HAL_Delay(7000);
 
   // __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, 1600);
 
@@ -168,6 +178,58 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+
+
+		if(TRYB == 'c')
+		{
+			HAL_UART_Receive_DMA(&huart2, (uint8_t*)rxBuf, 21);
+			while(id != 'x')
+			{
+				if (flaga == 1) {
+					parse_ReceivedData();
+					flaga = 0;
+				}
+				if(move == 1)
+				{
+				InverseKinematics(Data[0], Data[1],Data[3], &obiekt,&position,0);
+				moveManipulator(&htim2, Theta1(obiekt.servo1), Theta2(obiekt.servo2), Theta3(obiekt.servo3));
+				move = 0;
+				}
+			}
+			flaga_trybu = 0;
+		}
+
+
+		if(TRYB == 'n')
+		{
+			HAL_UART_Receive_DMA(&huart2, (uint8_t*)rxBuf, 24);
+
+		}
+
+
+
+
+
+
+
+
+
+		if(TRYB!='c' || TRYB !='n' || TRYB !='p')
+		{
+			flaga_trybu =0;
+		}
+		if(flaga_trybu == 0)
+			 HAL_UART_Receive_IT(&huart2, &TRYB, 1);
+
+
+	  /*if (flaga == 1) {
+	  					parse_ReceivedData();
+	  					flaga = 0;
+	  				}
+	  InverseKinematics(Data[0], Data[1],Data[2], &obiekt,&position,0);
+	  moveManipulator(&htim2, Theta1(obiekt.servo1), Theta2(obiekt.servo2), Theta3(obiekt.servo3));*/
+
+
 		//sprintf(buffer, "%c%i %i %i \n", 'A', 7,10, 11);
 		//HAL_UART_Transmit(&huart2, buffer, strlen(buffer), 10);
 		//HAL_Delay(100);
@@ -182,14 +244,12 @@ int main(void)
 		//cpr2 = (TIM3->CNT);
 		//cpr3 = (TIM4->CNT);
 		//cpr4 =(TIM5->CNT);
-	  	  if(flaga == 1)
-	  	  {
-	  		  parse_ReceivedData();
-	  		  flaga = 0;
-	  	  }
-		InverseKinematics(Data[0], Data[1], &obiekt);
-		__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, Theta1(obiekt.servo1));
-		__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, Theta2(obiekt.servo2));
+
+
+
+
+
+
 
 		// __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_4,55000);
 		 //prawo góra forward
@@ -619,6 +679,32 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
 	if(huart->Instance == USART2)
 	{
+		if(flaga_trybu == 0)
+		{
+			flaga_trybu = 1;
+			//flaga = 1;
+			//TRYB = *rxBuf;
+		}
+
+
+		if(TRYB == 'c'){
+			flaga = 1;
+			move = 1;
+			HAL_UART_Receive_DMA(&huart2, (uint8_t*)rxBuf, 21);
+		}
+
+		else if(TRYB == 'n'){
+
+		}
+
+		else if(TRYB == 'p')
+		{
+
+		}
+
+		//flaga = 1;
+		// HAL_UART_Receive_DMA(&huart2, (uint8_t*)rxBuf, 21);
+
 		/*__HAL_UART_FLUSH_DRREGISTER(&huart2);
 	int x = 0;
 		int init_size = strlen(rxBuf);
@@ -675,45 +761,10 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 
 	//DLA FLOATA
 	//for(int i=0;i<21;i++) rxBuf[i] = 0;
-		flaga = 1;
-	HAL_UART_Receive_DMA(&huart2, (uint8_t*)rxBuf, 21);
+
 
 	}
 }
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-}
-
-/*void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
-
-	//uint8_t Data[50]; // Tablica przechowujaca wysylana wiadomosc.
-	//uint16_t size = 0; // Rozmiar wysylanej wiadomosci
-	int mess =  15;
-
-	// Odebrany znak zostaje przekonwertowany na liczbe calkowita i sprawdzony
-	// instrukcja warunkowa
-
-
-	switch (atoi(&Received)) {
-
-	case 0: // Jezeli odebrany zostanie znak 0
-		printf("%d\r\n", mess);
-
-		break;
-
-	case 9: // Jezeli odebrany zostanie znak 1
-		printf("%d\r\n", mess);
-		HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_15);
-		break;
-
-	default: // Jezeli odebrano nieobslugiwany znak
-		printf("%d\r\n", mess);
-		break;
-	}
-
-	//HAL_UART_Transmit_IT(&huart2, Data, size); // Rozpoczecie nadawania danych z wykorzystaniem przerwan
-	HAL_UART_Receive_IT(&huart2, &Received, 1); // Ponowne w��czenie nas�uchiwania
-}*/
 /* USER CODE END 4 */
 
 /**
