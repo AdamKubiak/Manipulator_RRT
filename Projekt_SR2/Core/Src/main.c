@@ -39,7 +39,7 @@ int data[3];
 float Data[3];
 char id = 'a';
 uint8_t flaga = 0;
-char TRYB;
+uint8_t TRYB;
 uint8_t flaga_trybu = 0;
 uint8_t move = 0;
 
@@ -89,7 +89,8 @@ static void MX_TIM5_Init(void);
 /* USER CODE BEGIN 0 */
 void parse_ReceivedData()
 {
-
+	if(TRYB == 'c')
+	{
 		int x = 0;
 	int init_size = strlen(rxBuf);
 	char delim[] = ",";
@@ -107,10 +108,34 @@ void parse_ReceivedData()
 		}
 
 	for(int i=0;i<50;i++) rxBuf[i] = NULL;
-
-	for(int i=0;i<50;i++) rxBuf[i] = NULL;
+	}
 
 }
+
+	if(TRYB == 'r')
+		{
+			int x = 0;
+		int init_size = strlen(rxBuf);
+		char delim[] = ",";
+
+		char *ptr = strtok(rxBuf, delim);
+		//ptr = strtok(rxBuf, delim);
+		id = *ptr;
+
+		if (id == 'r') {
+			while (ptr != NULL) {
+				//printf("'%s'\n", ptr);
+				ptr = strtok(NULL, delim);
+				Data[x++] = atof(ptr);
+				//sscanf(ptr, "%d", &data[x++]);
+			}
+
+		for(int i=0;i<50;i++) rxBuf[i] = NULL;
+		}
+
+	}
+
+
 }
 /* USER CODE END 0 */
 
@@ -150,9 +175,8 @@ int main(void)
   MX_TIM4_Init();
   MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
-  printf("Start aplikacji\n\r");
   __HAL_UART_FLUSH_DRREGISTER(&huart2);
-  HAL_UART_Receive_IT(&huart2, &TRYB, 1);
+  HAL_UART_Receive_DMA(&huart2, &TRYB, 1);
   //HAL_UART_Receive_DMA(&huart2, (uint8_t*)rxBuf, 21);
   HAL_TIM_Encoder_Start_IT(&htim1, TIM_CHANNEL_ALL);
   HAL_TIM_Encoder_Start_IT(&htim3, TIM_CHANNEL_ALL);
@@ -189,7 +213,7 @@ int main(void)
 					parse_ReceivedData();
 					flaga = 0;
 				}
-				if(move == 1)
+				if(move == 1 && (id!='x'))
 				{
 				InverseKinematics(Data[0], Data[1],Data[3], &obiekt,&position,0);
 				moveManipulator(&htim2, Theta1(obiekt.servo1), Theta2(obiekt.servo2), Theta3(obiekt.servo3));
@@ -200,9 +224,23 @@ int main(void)
 		}
 
 
-		if(TRYB == 'n')
+		if(TRYB == 'r')
 		{
-			HAL_UART_Receive_DMA(&huart2, (uint8_t*)rxBuf, 24);
+			//ForwardKinematics(T1, T2, T3, position)
+			//sprintf()
+			//HAL_UART_Transmit(&huart2, buffer, 21, 10);
+
+			HAL_UART_Receive_DMA(&huart2, (uint8_t*)rxBuf, 11);
+			while(id!='x')
+			{
+				if (flaga == 1) {
+					parse_ReceivedData();
+					flaga = 0;
+				}
+				__HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_1,Data[0]);
+				__HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_2,Data[1]);
+			}
+			flaga_trybu = 0;
 
 		}
 
@@ -212,14 +250,14 @@ int main(void)
 
 
 
-
+		TRYB = 0;
 
 		if(TRYB!='c' || TRYB !='n' || TRYB !='p')
 		{
 			flaga_trybu =0;
 		}
 		if(flaga_trybu == 0)
-			 HAL_UART_Receive_IT(&huart2, &TRYB, 1);
+			 HAL_UART_Receive_DMA(&huart2, &TRYB, 1);
 
 
 	  /*if (flaga == 1) {
@@ -682,25 +720,41 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 		if(flaga_trybu == 0)
 		{
 			flaga_trybu = 1;
+			id = 'a';
 			//flaga = 1;
 			//TRYB = *rxBuf;
 		}
 
 
 		if(TRYB == 'c'){
+			//id = 1;
 			flaga = 1;
 			move = 1;
+			if(rxBuf[0] == 'x')
+			{
+				HAL_UART_Receive_DMA(&huart2, &TRYB, 1);
+				id = 'x';
+				rxBuf[0] = 0;
+			}
+			else{
 			HAL_UART_Receive_DMA(&huart2, (uint8_t*)rxBuf, 21);
+			}
 		}
 
-		else if(TRYB == 'n'){
+		if(TRYB == 'r'){
+
+			if (rxBuf[0] == 'x') {
+				HAL_UART_Receive_DMA(&huart2, &TRYB, 1);
+				id = 'x';
+				rxBuf[0] = 0;
+			} else {
+				flaga = 1;
+				HAL_UART_Receive_DMA(&huart2, (uint8_t*) rxBuf, 11);
+			}
 
 		}
 
-		else if(TRYB == 'p')
-		{
 
-		}
 
 		//flaga = 1;
 		// HAL_UART_Receive_DMA(&huart2, (uint8_t*)rxBuf, 21);
