@@ -7,6 +7,7 @@
 typedef struct
 {
 	uint16_t position[2];
+	int sendJoy[2];
 
 }joystick;
 
@@ -20,50 +21,43 @@ void joystick_Stop(ADC_HandleTypeDef *hadc)
 	HAL_ADC_Stop_DMA(hadc);
 }
 
-int voltageToAngleX(const joystick obiekt)
+int voltageToAngleX(joystick *obiekt)
 {
 
 		int  value;
-		  //int minC=1600;
-		  //int maxC=7800;
-		  //int minA=4;
-		  //int maxA=4095;
-		  value = 1600+(obiekt.position[0]*1.514);
+		  int minC=1600;
+		  int maxC=7800;
+		  int minA=4;
+		  int maxA=4095;
+		  value = 1600+(obiekt->position[0]*1.514);;
+
+
+
 		  return value;
 
 }
-int voltageToAngleY(const joystick obiekt)
+int voltageToAngleY(joystick *obiekt)
 {
 
 		int  value;
-		  //int minC=1600;
-		  //int maxC=7800;
-		  //int minA=4;
-		  //int maxA=4095;
-		  value = 1600+(obiekt.position[1]*1.514);
+		  int minC=1600;
+		  int maxC=7800;
+		  int minA=4;
+		  int maxA=4095;
+		  value = 1600+(obiekt->position[1]*1.514);
+
+
+
 		  return value;
 
 }
 
-/*int voltageToAngleZ(const joystick obiekt)
-{
-
-		int  value;
-		  //int minC=1600;
-		  //int maxC=7800;
-		  //int minA=4;
-		  //int maxA=4095;
-		  value = 1600+(obiekt.position[2]*1.514);
-		  return value;
-
-}*/
-/*void joystick_Control(TIM_HandleTypeDef *htim,const joystick obiekt)
+void joystick_Control(joystick *obiekt)
 {
 
 
-	__HAL_TIM_SET_COMPARE(htim,TIM_CHANNEL_2,voltageToAngleX(obiekt));
-	__HAL_TIM_SET_COMPARE(htim,TIM_CHANNEL_3,voltageToAngleY(obiekt));
-	__HAL_TIM_SET_COMPARE(htim,TIM_CHANNEL_4,voltageToAngleZ(obiekt));
-}*/
+	obiekt->sendJoy[0] = voltageToAngleX(obiekt);
+	obiekt->sendJoy[1] = voltageToAngleY(obiekt);
+}
 
 #endif /* INC_JOYSTICK_H_ */

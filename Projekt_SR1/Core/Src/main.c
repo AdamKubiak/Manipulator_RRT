@@ -22,16 +22,21 @@
 #include "adc.h"
 #include "dma.h"
 #include "spi.h"
+#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
-#include "SSD1331.h"
+#include <stdlib.h>
+#include <Joystick.h>
+
 #include "matrix_lib.h"
 #include "Joystick.h"
 #include "MY_FLASH.h"
+#include "drawMenu.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -51,12 +56,15 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-uint8_t Received;
+uint8_t Received[21];
 uint8_t testinkr = 0;
 DMA_HandleTypeDef hdma_spi1_tx;
 joystick joy;
-int x,y;
-int a,b,c,d =0;
+int y_rect = 4, rec, flagaTIM3;
+int rectMode, toggle;
+char buffer[100];//!!50
+uint8_t Data[3];
+joystick joy;
 
 /* USER CODE END PV */
 
@@ -73,16 +81,480 @@ int _write(int file, char *ptr, int len) {
 	return len;
 }
 
-void drawMenu()
+void parse_ReceivedData()
 {
-	  ssd1331_draw_line(0,49,95,49, WHITE);
-	  ssd1331_display_string(7, 0, "Reczny", FONT_1206, GREEN);
-	  ssd1331_display_string(7, 11, "Sekwencja", FONT_1206, GREEN);
-	  ssd1331_display_string(7, 22, "Coords", FONT_1206, GREEN);
-	  ssd1331_fill_rect(0,4,4,4,WHITE);
-	  ssd1331_display_string(0, 51, "Anuluj", FONT_1206, GREEN);//Wyświetlenie przykładowego tekstu
-	  ssd1331_display_string(83, 51, "OK", FONT_1206, GREEN);
+	uint8_t id;
+	int x = 0;
+	int init_size = strlen(Received);
+	char delim[] = ",";
+
+	char *ptr = strtok(Received, delim);
+	id = *ptr;
+
+	if (id == 'c')
+	{
+		while (ptr != NULL)
+		{
+			ptr = strtok(NULL, delim);
+			Data[x++] = atof(ptr);
+		}
+
+		for(int i=0;i<50;i++) Received[i] = NULL;
+	}
 }
+
+void manualMode()
+{
+	sprintf(buffer,"r");
+    HAL_UART_Transmit(&huart2, buffer, strlen((char*)buffer), 10);
+
+	rectMode = 1;
+	drawManualMode();
+
+	while(matrix_ReadKey() != 4)
+	{
+		joystick_Control(&joy);
+
+		if(rec)
+		{
+			parse_ReceivedData();
+
+			ssd1331_fill_rect(16,15,36,12,BLACK);
+			ssd1331_fill_rect(64,15,36,12,BLACK);
+			ssd1331_fill_rect(38,27,36,12,BLACK);
+
+			ssd1331_display_string(16, 15, Data[0], FONT_1206, GREEN);
+			ssd1331_display_string(64, 15, Data[1], FONT_1206, GREEN);
+			ssd1331_display_string(38, 27, Data[2], FONT_1206, GREEN);
+
+			rec = 0;
+
+			HAL_UART_Receive_IT(&huart2, &Received, 21);
+		}
+
+		if(flagaTIM3)
+		{
+			sprintf(buffer,"r,%d,%d", joy.sendJoy[0], joy.sendJoy[1]);
+			HAL_UART_Transmit(&huart2, buffer, strlen(buffer), 10);
+
+			flagaTIM3 = 0 ;
+		}
+	}
+	drawMenu();
+	rectMode = 0;
+
+	sprintf(buffer,"x0000000000");
+	HAL_UART_Transmit(&huart2, buffer, strlen((char*)buffer), 10);
+}
+
+void seqMode()
+{
+	while(matrix_ReadKey()!= 4)
+	{
+		rectMode = 2;
+		drawSeqMode(0);
+
+		y_rect = 16;
+		int chooseSeqMode;
+		int seqCnt = 1;
+		int seqNum;
+
+		while(matrix_ReadKey()!= 4)
+		{
+			uint8_t coordX[6] = "";
+			uint8_t coordY[6] = "";
+			uint8_t coordZ[6] = "";
+
+			int xRectCoord = 16;
+			int yRectCoord = 16;
+			int i = 0;
+			int save = 0;
+
+			if(matrix_ReadKey()== 3)
+				 y_rect = 16;
+
+			if(matrix_ReadKey()==7)
+				 y_rect = 27;
+
+			if (matrix_ReadKey() == 16)
+			{
+				if (y_rect == 16)
+				{
+					chooseSeqMode = 1;
+					sprintf(buffer,"n");
+				    HAL_UART_Transmit(&huart2, buffer, strlen((char*)buffer), 10);
+				}
+
+				else if (y_rect == 27)
+				{
+					chooseSeqMode = 2;
+					sprintf(buffer,"p");
+				    HAL_UART_Transmit(&huart2, buffer, strlen((char*)buffer), 10);
+				}
+			}
+
+			if(chooseSeqMode == 1)
+			{
+				drawSeqMode(1);
+				rectMode = 3;
+
+				ssd1331_display_num(2, 37, seqCnt, 1, FONT_1206, BLUE);
+
+				//X Coord
+				while(matrix_ReadKey()!= 4)
+				{
+					if(i<6)
+					{
+						if(matrix_ReadKey() == 13) {coordX[i] = '.'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 3)  {coordX[i] = '1'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 7)  {coordX[i] = '2'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 11) {coordX[i] = '3'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 2)  {coordX[i] = '4'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 6)  {coordX[i] = '5'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 10) {coordX[i] = '6'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 1)  {coordX[i] = '7'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 5)  {coordX[i] = '8'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 9)  {coordX[i] = '9'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 14) {coordX[i] = '0'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 15) {coordX[i] = '-'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+					}
+
+					if(matrix_ReadKey() == 8){i--; coordX[i] = ' '; ssd1331_fill_rect(16,15,36,12,BLACK);}
+
+					xRectCoord = i*6 + 16;
+					ssd1331_display_string(16, 15, coordX, FONT_1206, GREEN);
+
+					if (i <= 5) ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,WHITE);
+
+					if(matrix_ReadKey() == 12)
+					{
+						if (i <= 5) ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);
+
+						for(;i< 6 ; i++) {coordX[i] = '0';}
+
+						i = 0;
+						break;
+					}
+				}
+
+				//Y Coord
+				xRectCoord = 64,
+				yRectCoord = 16;
+
+				while(matrix_ReadKey()!= 4)
+				{
+					if(i<6)
+					{
+						if(matrix_ReadKey() == 13) {coordY[i] = '.'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 3)  {coordY[i] = '1'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 7)  {coordY[i] = '2'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 11) {coordY[i] = '3'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 2)  {coordY[i] = '4'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 6)  {coordY[i] = '5'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 10) {coordY[i] = '6'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 1)  {coordY[i] = '7'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 5)  {coordY[i] = '8'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 9)  {coordY[i] = '9'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 14) {coordY[i] = '0'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 15) {coordY[i] = '-'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+					}
+
+					if(matrix_ReadKey() == 8)  {i--; coordY[i] = ' '; ssd1331_fill_rect(64,15,36,12,BLACK); }
+
+					xRectCoord = i*6 + 64;
+
+					ssd1331_display_string(64, 15, coordY, FONT_1206, GREEN);
+					if (i <= 5) ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,WHITE);
+
+					if(matrix_ReadKey() == 12)
+					{
+						if (i <= 5) ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);
+
+						for(;i< 6 ; i++) {coordY[i] = '0';}
+
+						i = 0;
+						break;
+					}
+				}
+
+				//Z Coord
+				xRectCoord = 42;
+				yRectCoord = 27;
+
+				while(matrix_ReadKey()!= 4)
+				{
+					if(i<6)
+					{
+						if(matrix_ReadKey() == 13) {coordZ[i] = '.'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 3)  {coordZ[i] = '1'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 7)  {coordZ[i] = '2'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 11) {coordZ[i] = '3'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 2)  {coordZ[i] = '4'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 6)  {coordZ[i] = '5'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 10) {coordZ[i] = '6'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 1)  {coordZ[i] = '7'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 5)  {coordZ[i] = '8'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 9)  {coordZ[i] = '9'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 14) {coordZ[i] = '0'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+						if(matrix_ReadKey() == 15) {coordZ[i] = '-'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+					}
+
+					if(matrix_ReadKey() == 8){	i--; coordZ[i] = ' '; ssd1331_fill_rect(42,27,36,12,BLACK); }
+
+					xRectCoord = i*6 + 42;
+
+					ssd1331_display_string(42, 27, coordZ, FONT_1206, GREEN);
+					if (i <= 6) ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,WHITE);
+
+					//NEXT
+					if(matrix_ReadKey() == 12)
+					{
+						ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);
+
+						for(;i< 5 ; i++) {coordZ[i] = '0';}
+
+						sprintf(buffer,"n,%s,%s,%s, %i, %i", coordX, coordY,coordZ,seqCnt, save);
+						HAL_UART_Transmit(&huart2, buffer, strlen((char*)buffer), 10);
+
+						ssd1331_fill_rect(16,15,36,12,BLACK);
+						ssd1331_fill_rect(64,15,36,12,BLACK);
+						ssd1331_fill_rect(42,27,36,12,BLACK);
+						ssd1331_fill_rect(1,39,7,9,BLACK);
+
+						seqCnt++;
+
+						break;
+					}
+
+					//Save
+					if(matrix_ReadKey() == 16)
+					{
+						save = 1;
+
+						sprintf(buffer,"n,%s,%s,%s,%i,%i", coordX, coordY,coordZ, seqCnt,save);
+						HAL_UART_Transmit(&huart2, buffer, strlen((char*)buffer), 10);
+
+						break;
+					}
+				}
+				if(save) break;
+
+				sprintf(buffer,"x,0000000000000000000000");
+				HAL_UART_Transmit(&huart2, buffer, strlen((char*)buffer), 10);
+			}
+
+
+			if(chooseSeqMode == 2)
+			{
+				drawSeqMode(2);
+				y_rect = 16;
+
+				while(matrix_ReadKey()!= 4)
+				{
+					if(matrix_ReadKey()== 3)
+						 y_rect = 16;
+
+					if(matrix_ReadKey()==7)
+						 y_rect = 27;
+
+					if(matrix_ReadKey()==11)
+						 y_rect = 38;
+
+					if (matrix_ReadKey() == 16)
+					{
+						if (y_rect == 16)
+						{
+							sprintf(buffer,"p,%i", seqNum);
+							HAL_UART_Transmit(&huart2, buffer, strlen((char*)buffer), 10);
+						}
+
+						else if (y_rect == 27)
+						{
+							sprintf(buffer,"p,%s,%s,%s", coordX, coordY,coordZ);
+							HAL_UART_Transmit(&huart2, buffer, strlen((char*)buffer), 10);
+						}
+
+						else if (y_rect == 38)
+						{
+							sprintf(buffer, "p,%s,%s,%s", coordX, coordY, coordZ);
+							HAL_UART_Transmit(&huart2, buffer, strlen((char*) buffer), 10);
+						}
+					}
+
+				}
+				sprintf(buffer,"x,00000000000000000000");
+				HAL_UART_Transmit(&huart2, buffer, strlen((char*)buffer), 10);
+			}
+		}
+	}
+	drawMenu();
+}
+
+void coordMode()
+{
+	sprintf(buffer,"c");
+    HAL_UART_Transmit(&huart2, buffer, strlen((char*)buffer), 10);
+
+	rectMode = 3;
+	drawCoordMode();
+
+	while(matrix_ReadKey()!= 4)
+	{
+		uint8_t coordX[6] = "";
+		uint8_t coordY[6] = "";
+		uint8_t coordZ[6] = "";
+
+		int xRectCoord = 16;
+		int yRectCoord = 16;
+		int i = 0;
+		int new = 0;
+
+		//X Coord
+		while(matrix_ReadKey()!= 4)
+		{
+			if(i<6)
+			{
+				if(matrix_ReadKey() == 13) {coordX[i] = '.'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 3)  {coordX[i] = '1'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 7)  {coordX[i] = '2'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 11) {coordX[i] = '3'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 2)  {coordX[i] = '4'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 6)  {coordX[i] = '5'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 10) {coordX[i] = '6'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 1)  {coordX[i] = '7'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 5)  {coordX[i] = '8'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 9)  {coordX[i] = '9'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 14) {coordX[i] = '0'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 15) {coordX[i] = '-'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+			}
+
+			if(matrix_ReadKey() == 8){i--; coordX[i] = ' '; ssd1331_fill_rect(16,15,36,12,BLACK);}
+
+			xRectCoord = i*6 + 16;
+			ssd1331_display_string(16, 15, coordX, FONT_1206, GREEN);
+
+			if (i <= 5) ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,WHITE);
+
+			if(matrix_ReadKey() == 12)
+			{
+				if (i <= 5) ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);
+
+				for(;i< 6 ; i++) {coordX[i] = '0';}
+
+				i = 0;
+				break;
+			}
+
+			if(matrix_ReadKey() == 16)
+			{
+				new = 1;
+				break;
+			}
+		}
+
+		//Y Coord
+		xRectCoord = 64,
+		yRectCoord = 16;
+
+		while(matrix_ReadKey()!= 4)
+		{
+			if(i<6)
+			{
+				if(matrix_ReadKey() == 13) {coordY[i] = '.'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 3)  {coordY[i] = '1'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 7)  {coordY[i] = '2'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 11) {coordY[i] = '3'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 2)  {coordY[i] = '4'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 6)  {coordY[i] = '5'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 10) {coordY[i] = '6'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 1)  {coordY[i] = '7'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 5)  {coordY[i] = '8'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 9)  {coordY[i] = '9'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 14) {coordY[i] = '0'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 15) {coordY[i] = '-'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+			}
+
+			if(matrix_ReadKey() == 8)  {i--; coordY[i] = ' '; ssd1331_fill_rect(64,15,36,12,BLACK); }
+
+			xRectCoord = i*6 + 64;
+
+			ssd1331_display_string(64, 15, coordY, FONT_1206, GREEN);
+			if (i <= 5) ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,WHITE);
+
+			if(matrix_ReadKey() == 12)
+			{
+				if (i <= 5) ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);
+
+				for(;i< 6 ; i++) {coordY[i] = '0';}
+
+				i = 0;
+				break;
+			}
+
+			if(matrix_ReadKey() == 16 || new)
+			{
+				new = 1;
+				break;
+			}
+		}
+
+		//Z Coord
+		xRectCoord = 42;
+		yRectCoord = 27;
+
+		while(matrix_ReadKey()!= 4)
+		{
+			if(i<6)
+			{
+				if(matrix_ReadKey() == 13) {coordZ[i] = '.'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 3)  {coordZ[i] = '1'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 7)  {coordZ[i] = '2'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 11) {coordZ[i] = '3'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 2)  {coordZ[i] = '4'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 6)  {coordZ[i] = '5'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 10) {coordZ[i] = '6'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 1)  {coordZ[i] = '7'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 5)  {coordZ[i] = '8'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 9)  {coordZ[i] = '9'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 14) {coordZ[i] = '0'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+				if(matrix_ReadKey() == 15) {coordZ[i] = '-'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
+			}
+
+			if(matrix_ReadKey() == 8){	i--; coordZ[i] = ' '; ssd1331_fill_rect(42,27,36,12,BLACK); }
+
+			xRectCoord = i*6 + 42;
+
+			ssd1331_display_string(42, 27, coordZ, FONT_1206, GREEN);
+			if (i <= 6) ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,WHITE);
+
+			//NEXT
+			if(matrix_ReadKey() == 12)
+			{
+				ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);
+
+				for(;i< 5 ; i++) {coordZ[i] = '0';}
+
+				sprintf(buffer,"c,%s,%s,%s", coordX, coordY,coordZ);
+				HAL_UART_Transmit(&huart2, buffer, 21, 10);
+			}
+
+			//NEW
+			if(matrix_ReadKey() == 16 || new)
+			{
+				ssd1331_fill_rect(16,15,36,12,BLACK);
+				ssd1331_fill_rect(64,15,36,12,BLACK);
+				ssd1331_fill_rect(42,27,36,12,BLACK);
+				break;
+			}
+		}
+	}
+	drawMenu();
+
+	sprintf(buffer,"x000000000000000000000");
+	HAL_UART_Transmit(&huart2, buffer, strlen((char*)buffer), 10);
+}
+
+
 /* USER CODE END 0 */
 
 /**
@@ -117,15 +589,19 @@ int main(void)
   MX_USART2_UART_Init();
   MX_ADC1_Init();
   MX_SPI1_Init();
+  MX_TIM2_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
-  HAL_UART_Receive_IT(&huart2, &Received, 1);
+  HAL_UART_Receive_IT(&huart2, &Received, 21);
+  //HAL_TIM_Base_Start(&htim11);
+  HAL_TIM_Base_Start_IT(&htim2);
+  HAL_TIM_Base_Start_IT(&htim3);
+
+  joystick_Start(&hadc1, &joy);
 
   ssd1331_init(); //Inicjalizacja wyświetlacza OLED
   ssd1331_clear_screen(BLACK); //Ustawianie tła wyświetlacza
-
-drawMenu();
-
-  joystick_Start(&hadc1, &joy);
+  drawMenu();
 
   /* USER CODE END 2 */
 
@@ -133,41 +609,34 @@ drawMenu();
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  rectMode = 0;
 
+		if (matrix_ReadKey() == 16)
+		{
+			if (y_rect == 4)
+				manualMode();
 
-	 if(matrix_ReadKey()==4)
+			else if (y_rect == 15)
+				seqMode();
+
+			else if (y_rect == 26)
+				coordMode();
+
+			y_rect = 4;
+		}
+
+	 if(matrix_ReadKey()== 3)
 	 {
-		 a++;
-		 ssd1331_clear_screen(0);
-		 ssd1331_display_string(0, 0, "S1!", FONT_1608, GREEN);
-
+		 y_rect = 4;
 	 }
-	 if(matrix_ReadKey()==8)
+	 if(matrix_ReadKey()==7)
 	 {
-		 ssd1331_clear_screen(0);
-		 b++;
-	 	 ssd1331_display_string(0, 0, "S2", FONT_1608, GREEN);
+		 y_rect = 15;
 	 }
-	 if(matrix_ReadKey()==9)
+	 if(matrix_ReadKey()==11)
 	 {
-		 ssd1331_clear_screen(0);
-		 ssd1331_display_string(0, 0, "Hello World!", FONT_1608, GREEN);
+		 y_rect = 26;
 	 }
-	 if(matrix_ReadKey()==5)
-	 {
-		 ssd1331_draw_line(2,40,60,20, GREEN);
-	 }
-
-	 if(matrix_ReadKey()==6)
-	 	 {
-	 		 ssd1331_draw_line(2,40,60,20, 0);
-	 	 }
-
-	 if(matrix_ReadKey()==13)
-	 	 	 {
-		 ssd1331_clear_screen(0);
-		// ssd1331_draw_bitmap(0,0, array_usm, 96, 64, GREEN);
-	 	 	 }
 
     /* USER CODE END WHILE */
 
@@ -195,7 +664,12 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  RCC_OscInitStruct.PLL.PLLM = 8;
+  RCC_OscInitStruct.PLL.PLLN = 72;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
+  RCC_OscInitStruct.PLL.PLLQ = 4;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -204,47 +678,54 @@ void SystemClock_Config(void)
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
   {
     Error_Handler();
   }
 }
 
 /* USER CODE BEGIN 4 */
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+	if(huart->Instance == USART2)
+			rec = 1;
+}
 
-	//uint8_t Data[50]; // Tablica przechowujaca wysylana wiadomosc.
-	//uint16_t size = 0; // Rozmiar wysylanej wiadomosci
-	int mess =  420;
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+	if(htim->Instance == TIM2)
+	{
+		HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_15);
 
-	// Odebrany znak zostaje przekonwertowany na liczbe calkowita i sprawdzony
-	// instrukcja warunkowa
+			if(toggle)
+			{
+				if(rectMode == 0 || rectMode == 2)
+					ssd1331_fill_rect(0, y_rect, 4, 4, WHITE);
 
+				toggle = 0;
+			}
 
-	switch (atoi(&Received)) {
+			else
+			{
+				if(rectMode == 0)
+					ssd1331_fill_rect(0, 4, 4, 46, BLACK);
 
-	case 0: // Jezeli odebrany zostanie znak 0
-		printf("%d\r\n", mess);
+				if (rectMode == 2)
+					ssd1331_fill_rect(0, 16,4,34,BLACK);
 
-		break;
-
-	case 4: // Jezeli odebrany zostanie znak 1
-		printf("%d\r\n", mess);
-		HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_14);
-		break;
-
-	default: // Jezeli odebrano nieobslugiwany znak
-		printf("%d\r\n", mess);
-		break;
+				toggle = 1;
+			}
+	}
+	if(htim->Instance == TIM3)
+	{
+		flagaTIM3 = 1;
 	}
 
-	//HAL_UART_Transmit_IT(&huart2, Data, size); // Rozpoczecie nadawania danych z wykorzystaniem przerwan
-	HAL_UART_Receive_IT(&huart2, &Received, 1); // Ponowne w��czenie nas�uchiwania
 }
 /* USER CODE END 4 */
 
