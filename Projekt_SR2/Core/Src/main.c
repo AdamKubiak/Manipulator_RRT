@@ -27,6 +27,7 @@
 #include "InverseKinematics.h"
 #include "Servo.h"
 #include <stdlib.h>
+#include "MY_FLASH.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -36,13 +37,20 @@ int cpr1,cpr2,cpr3,cpr4;
 uint8_t rxBuf[50];
 uint8_t buffer[50];
 int data[3];
-float Data[3];
+float Data[4];
 char id = 'a';
 uint8_t flaga = 0;
 uint8_t TRYB;
 uint8_t flaga_trybu = 0;
 uint8_t move = 0;
-
+float flashData[4];
+float flashData_check[4];
+uint8_t flagaUART=0;
+int i = 0;
+int sectIT;
+//int sectPLAY;
+uint8_t erase = 1;
+float seqNum;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -87,42 +95,17 @@ static void MX_TIM5_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void parse_ReceivedData()
-{
-	if(TRYB == 'c')
-	{
+void parse_ReceivedData() {
+
+
+
 		int x = 0;
-	int init_size = strlen(rxBuf);
-	char delim[] = ",";
-
-	char *ptr = strtok(rxBuf, delim);
-	//ptr = strtok(rxBuf, delim);
-	id = *ptr;
-
-	if (id == 'c') {
-		while (ptr != NULL) {
-			//printf("'%s'\n", ptr);
-			ptr = strtok(NULL, delim);
-			Data[x++] = atof(ptr);
-			//sscanf(ptr, "%d", &data[x++]);
-		}
-
-	for(int i=0;i<50;i++) rxBuf[i] = NULL;
-	}
-
-}
-
-	if(TRYB == 'r')
-		{
-			int x = 0;
 		int init_size = strlen(rxBuf);
 		char delim[] = ",";
 
 		char *ptr = strtok(rxBuf, delim);
-		//ptr = strtok(rxBuf, delim);
 		id = *ptr;
 
-		if (id == 'r') {
 			while (ptr != NULL) {
 				//printf("'%s'\n", ptr);
 				ptr = strtok(NULL, delim);
@@ -130,10 +113,8 @@ void parse_ReceivedData()
 				//sscanf(ptr, "%d", &data[x++]);
 			}
 
-		for(int i=0;i<50;i++) rxBuf[i] = NULL;
-		}
-
-	}
+			for (int i = 0; i < 50; i++)
+				rxBuf[i] = NULL;
 
 
 }
@@ -175,9 +156,12 @@ int main(void)
   MX_TIM4_Init();
   MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
-  __HAL_UART_FLUSH_DRREGISTER(&huart2);
-  HAL_UART_Receive_DMA(&huart2, &TRYB, 1);
-  //HAL_UART_Receive_DMA(&huart2, (uint8_t*)rxBuf, 21);
+  MY_FLASH_SetSectorAddrs(6, 0x08040000);
+
+
+  //__HAL_UART_FLUSH_DRREGISTER(&huart2);
+  //HAL_UART_Receive_DMA(&huart2, &TRYB, 1);
+  HAL_UART_Receive_DMA(&huart2, (uint8_t*)rxBuf, 26);
   HAL_TIM_Encoder_Start_IT(&htim1, TIM_CHANNEL_ALL);
   HAL_TIM_Encoder_Start_IT(&htim3, TIM_CHANNEL_ALL);
   HAL_TIM_Encoder_Start_IT(&htim4, TIM_CHANNEL_ALL);
@@ -202,9 +186,139 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  if(flagaUART == 1)
+	  {
+
+			 parse_ReceivedData();
+			 flagaUART = 0;
+			 HAL_UART_Receive_DMA(&huart2, (uint8_t*)rxBuf, 26);
+
+			 if(id == 'c')
+			 {
+				 move = 1;
+			 }
+
+	  }
+
+	  //RECZNY
+	  while(id == 'r')
+	  {
+		  if(flagaUART == 1)
+		  {
+			  parse_ReceivedData();
+			  flagaUART = 0;
+			  HAL_UART_Receive_DMA(&huart2, (uint8_t*)rxBuf, 26);
+		  }
+
+		  if(id == 'r')
+		  {
+			  __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_1,Data[0]);
+			  __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_2,Data[1]);
+
+		  }
+		  if(id != 'r')
+		  {
+			  moveManipulator(&htim2, Data[0], Data[1], Data[2]);
+		  }
+	  }
+
+	  //NOWA SEKWECJA
+	  while(id == 'n')
+	  {
+		  if(flagaUART == 1)
+		  {
+			  parse_ReceivedData();
+			  flagaUART = 0;
+			  HAL_UART_Receive_DMA(&huart2, (uint8_t*)rxBuf, 26);
+		  }
+
+		  if(sectIT == 0)
+		  {
+			  HAL_FLASH_Unlock();
+			    	//Erase the required Flash sector
+			    	FLASH_Erase_Sector(6, FLASH_VOLTAGE_RANGE_3);
+			    	HAL_FLASH_Lock();
+		  }
+
+		  if(id == 'n')
+		  {
+			  if(TRYB == 1 && flagaUART == 0)
+			  {
+			  if(Data[3] == 0)
+			  {
+				  MY_FLASH_WriteN(sectIT*16+4, Data, 3, DATA_TYPE_32);
+				 // MY_FLASH_ReadN(sectIT*16+4, flashData, 3, DATA_TYPE_32);
+
+				  //MY_FLASH_ReadN(4, flashData_check, 3, DATA_TYPE_32);
+				  sectIT++;
+				  flagaUART = 0;
+			  }
+
+			  if(Data[3] != 0)
+			  {
+				  MY_FLASH_WriteN(0, &Data[3], 1, DATA_TYPE_32);
+				  MY_FLASH_WriteN(sectIT*16+4, Data, 3, DATA_TYPE_32);
+				  sectIT = 0;
+				  id = 'a';
+			  }
+			  TRYB = 0;
+			  }
+		  }
+	  }
+
+	  //PLAY SEKWENCJA
+	  while(id == 'p')
+	  {
+		  if(flagaUART == 1)
+		  {
+			  parse_ReceivedData();
+			  flagaUART = 0;
+			  HAL_UART_Receive_DMA(&huart2, (uint8_t*)rxBuf, 26);
+		  }
 
 
-		if(TRYB == 'c')
+		  if(Data[0] == 1)
+		  {
+			  MY_FLASH_ReadN(0, &seqNum, 1, DATA_TYPE_32);
+
+			  for(int sectPLAY = 0;sectPLAY < (int)seqNum; sectPLAY++ )
+			  {
+				  MY_FLASH_ReadN(sectPLAY*16+4, flashData, 3, DATA_TYPE_32);
+
+				  InverseKinematics(flashData[0], flashData[1], flashData[2], &obiekt, &position, 0);
+				  moveManipulator(&htim2, Theta1(obiekt.servo1), Theta2(obiekt.servo2), Theta3(obiekt.servo3));
+
+				  HAL_Delay(1000);
+			  }
+			  id = 'a';
+
+		  }
+	  }
+
+	  //TRYB COORDINATES
+	  while(id == 'c')
+	  {
+		  if(flagaUART == 1)
+		  {
+			  parse_ReceivedData();
+			  flagaUART = 0;
+			  HAL_UART_Receive_DMA(&huart2, (uint8_t*)rxBuf, 26);
+			  move = 1;
+		  }
+
+		  if(id == 'c')
+		  {
+			  if(move  == 1)
+			  {
+			   InverseKinematics(Data[0], Data[1], Data[2], &obiekt, &position, 0);
+			   moveManipulator(&htim2, Theta1(obiekt.servo1), Theta2(obiekt.servo2), Theta3(obiekt.servo3));
+			   move = 0;
+			  }
+		  }
+	  }
+
+
+		/*if(TRYB == 'c')
 		{
 			HAL_UART_Receive_DMA(&huart2, (uint8_t*)rxBuf, 21);
 			while(id != 'x')
@@ -239,6 +353,7 @@ int main(void)
 				}
 				__HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_1,Data[0]);
 				__HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_2,Data[1]);
+
 			}
 			flaga_trybu = 0;
 
@@ -249,10 +364,9 @@ int main(void)
 
 
 
-
 		TRYB = 0;
 
-		if(TRYB!='c' || TRYB !='n' || TRYB !='p')
+		if(TRYB!='c' || TRYB !='n' || TRYB !='p' || TRYB !='r')
 		{
 			flaga_trybu =0;
 		}
@@ -263,25 +377,7 @@ int main(void)
 	  /*if (flaga == 1) {
 	  					parse_ReceivedData();
 	  					flaga = 0;
-	  				}
-	  InverseKinematics(Data[0], Data[1],Data[2], &obiekt,&position,0);
-	  moveManipulator(&htim2, Theta1(obiekt.servo1), Theta2(obiekt.servo2), Theta3(obiekt.servo3));*/
-
-
-		//sprintf(buffer, "%c%i %i %i \n", 'A', 7,10, 11);
-		//HAL_UART_Transmit(&huart2, buffer, strlen(buffer), 10);
-		//HAL_Delay(100);
-
-		/* HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, 1);
-		 HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, 0);
-		 HAL_Delay(3000);
-		 HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, 0);
-		 HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, 1);
-		 HAL_Delay(3000);*/
-		//cpr1 = (TIM1->CNT);
-		//cpr2 = (TIM3->CNT);
-		//cpr3 = (TIM4->CNT);
-		//cpr4 =(TIM5->CNT);
+	  				}*/
 
 
 
@@ -717,105 +813,8 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
 	if(huart->Instance == USART2)
 	{
-		if(flaga_trybu == 0)
-		{
-			flaga_trybu = 1;
-			id = 'a';
-			//flaga = 1;
-			//TRYB = *rxBuf;
-		}
-
-
-		if(TRYB == 'c'){
-			//id = 1;
-			flaga = 1;
-			move = 1;
-			if(rxBuf[0] == 'x')
-			{
-				HAL_UART_Receive_DMA(&huart2, &TRYB, 1);
-				id = 'x';
-				rxBuf[0] = 0;
-			}
-			else{
-			HAL_UART_Receive_DMA(&huart2, (uint8_t*)rxBuf, 21);
-			}
-		}
-
-		if(TRYB == 'r'){
-
-			if (rxBuf[0] == 'x') {
-				HAL_UART_Receive_DMA(&huart2, &TRYB, 1);
-				id = 'x';
-				rxBuf[0] = 0;
-			} else {
-				flaga = 1;
-				HAL_UART_Receive_DMA(&huart2, (uint8_t*) rxBuf, 11);
-			}
-
-		}
-
-
-
-		//flaga = 1;
-		// HAL_UART_Receive_DMA(&huart2, (uint8_t*)rxBuf, 21);
-
-		/*__HAL_UART_FLUSH_DRREGISTER(&huart2);
-	int x = 0;
-		int init_size = strlen(rxBuf);
-		char delim[] = ",";
-
-		char *ptr = strtok(rxBuf, delim);
-		//ptr = strtok(rxBuf, delim);
-		id = *ptr;
-
-		if (id == 'a') {
-			while (ptr != NULL) {
-				printf("'%s'\n", ptr);
-				ptr = strtok(NULL, delim);
-				Data[x++] = atof(ptr);
-				//sscanf(ptr, "%d", &data[x++]);
-			}
-		}*/
-//DZIALAJACE PRZESYLANIE INTA
-	/*int x = 0;
-	int init_size = strlen(rxBuf);
-	char delim[] = ",";
-
-	char *ptr = strtok(rxBuf, delim);
-	char id = *ptr;
-
-	if (id == 'a') {
-		while (ptr != NULL) {
-			printf("'%s'\n", ptr);
-			ptr = strtok(NULL, delim);
-			sscanf(ptr, "%d", &data[x++]);
-
-
-		}
-	}*/
-	/*if(rxBuf[0]=='*' && rxBuf[strlen(rxBuf)-1] == '#')
-	{
-		printf("ruszam bydlaka\r\n");
-		if(rxBuf[1]==1)
-		{
-			__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 7800);
-			//int x = rxBuf[1];
-			//printf("%d",x);
-		}
-		else
-		{
-			printf("invalid command!");
-		}
-	}*/
-	//printf("cos dostalem!");
-
-	//x = 0;
-	//DLA INTA
-	//HAL_UART_Receive_DMA(&huart2, (uint8_t*)rxBuf, 8);
-
-	//DLA FLOATA
-	//for(int i=0;i<21;i++) rxBuf[i] = 0;
-
+		flagaUART = 1;
+		TRYB = 1;
 
 	}
 }
