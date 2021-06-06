@@ -63,6 +63,7 @@ joystick joy;
 int y_rect = 4, rec, flagaTIM3;
 int rectMode, toggle;
 char buffer[100];//!!50
+char buffer_test[50];
 uint8_t Data[3];
 joystick joy;
 
@@ -85,7 +86,6 @@ void parse_ReceivedData()
 {
 	uint8_t id;
 	int x = 0;
-	int init_size = strlen(Received);
 	char delim[] = ",";
 
 	char *ptr = strtok(Received, delim);
@@ -105,9 +105,6 @@ void parse_ReceivedData()
 
 void manualMode()
 {
-	sprintf(buffer,"r");
-    HAL_UART_Transmit(&huart2, buffer, strlen((char*)buffer), 10);
-
 	rectMode = 1;
 	drawManualMode();
 
@@ -134,7 +131,7 @@ void manualMode()
 
 		if(flagaTIM3)
 		{
-			sprintf(buffer,"r,%d,%d", joy.sendJoy[0], joy.sendJoy[1]);
+			sprintf(buffer,"r,%d,%d,00000000000000", joy.sendJoy[0], joy.sendJoy[1]);
 			HAL_UART_Transmit(&huart2, buffer, strlen(buffer), 10);
 
 			flagaTIM3 = 0 ;
@@ -142,9 +139,6 @@ void manualMode()
 	}
 	drawMenu();
 	rectMode = 0;
-
-	sprintf(buffer,"x0000000000");
-	HAL_UART_Transmit(&huart2, buffer, strlen((char*)buffer), 10);
 }
 
 void seqMode()
@@ -181,15 +175,11 @@ void seqMode()
 				if (y_rect == 16)
 				{
 					chooseSeqMode = 1;
-					sprintf(buffer,"n");
-				    HAL_UART_Transmit(&huart2, buffer, strlen((char*)buffer), 10);
 				}
 
 				else if (y_rect == 27)
 				{
 					chooseSeqMode = 2;
-					sprintf(buffer,"p");
-				    HAL_UART_Transmit(&huart2, buffer, strlen((char*)buffer), 10);
 				}
 			}
 
@@ -259,18 +249,18 @@ void seqMode()
 						if(matrix_ReadKey() == 15) {coordY[i] = '-'; i++; ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);}
 					}
 
-					if(matrix_ReadKey() == 8)  {i--; coordY[i] = ' '; ssd1331_fill_rect(64,15,36,12,BLACK); }
+					if(matrix_ReadKey() == 8){i--; coordY[i] = ' '; ssd1331_fill_rect(64,15,36,12,BLACK);}
 
 					xRectCoord = i*6 + 64;
-
 					ssd1331_display_string(64, 15, coordY, FONT_1206, GREEN);
+
 					if (i <= 5) ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,WHITE);
 
 					if(matrix_ReadKey() == 12)
 					{
 						if (i <= 5) ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);
 
-						for(;i< 6 ; i++) {coordY[i] = '0';}
+						for(;i< 5 ; i++) {coordY[i] = '0';}
 
 						i = 0;
 						break;
@@ -311,10 +301,10 @@ void seqMode()
 					{
 						ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);
 
-						for(;i< 5 ; i++) {coordZ[i] = '0';}
+						for(;i< 6 ; i++) {coordZ[i] = '0';}
 
-						sprintf(buffer,"n,%s,%s,%s, %i, %i", coordX, coordY,coordZ,seqCnt, save);
-						HAL_UART_Transmit(&huart2, buffer, strlen((char*)buffer), 10);
+						sprintf(buffer_test,"n,%s,%s,%s,0000", coordX, coordY, coordZ);
+						HAL_UART_Transmit(&huart2, buffer_test, 26, 10);
 
 						ssd1331_fill_rect(16,15,36,12,BLACK);
 						ssd1331_fill_rect(64,15,36,12,BLACK);
@@ -331,16 +321,25 @@ void seqMode()
 					{
 						save = 1;
 
-						sprintf(buffer,"n,%s,%s,%s,%i,%i", coordX, coordY,coordZ, seqCnt,save);
+						for(;i< 6 ; i++) {coordZ[i] = '0';}
+
+						sprintf(buffer,"n,%s,%s,%s,%i,00", coordX, coordY,coordZ, seqCnt);
 						HAL_UART_Transmit(&huart2, buffer, strlen((char*)buffer), 10);
+
+					/*	for(int i = 0; i <6 ; 1++)
+						{
+							coordX[i] = flashData[i];
+							coordY[i] = flashData[6+i];
+							coordZ[i] = flashData[12+i];
+						}
+
+						float x = stoi(coordX);
+						*/
 
 						break;
 					}
 				}
 				if(save) break;
-
-				sprintf(buffer,"x,0000000000000000000000");
-				HAL_UART_Transmit(&huart2, buffer, strlen((char*)buffer), 10);
 			}
 
 
@@ -364,26 +363,23 @@ void seqMode()
 					{
 						if (y_rect == 16)
 						{
-							sprintf(buffer,"p,%i", seqNum);
+							sprintf(buffer,"p,1,0000000000000000000000");
 							HAL_UART_Transmit(&huart2, buffer, strlen((char*)buffer), 10);
 						}
 
 						else if (y_rect == 27)
 						{
-							sprintf(buffer,"p,%s,%s,%s", coordX, coordY,coordZ);
+							sprintf(buffer,"p,2,0000000000000000000000");
 							HAL_UART_Transmit(&huart2, buffer, strlen((char*)buffer), 10);
 						}
 
 						else if (y_rect == 38)
 						{
-							sprintf(buffer, "p,%s,%s,%s", coordX, coordY, coordZ);
+							sprintf(buffer,"p,3,0000000000000000000000");
 							HAL_UART_Transmit(&huart2, buffer, strlen((char*) buffer), 10);
 						}
 					}
-
 				}
-				sprintf(buffer,"x,00000000000000000000");
-				HAL_UART_Transmit(&huart2, buffer, strlen((char*)buffer), 10);
 			}
 		}
 	}
@@ -392,9 +388,6 @@ void seqMode()
 
 void coordMode()
 {
-	sprintf(buffer,"c");
-    HAL_UART_Transmit(&huart2, buffer, strlen((char*)buffer), 10);
-
 	rectMode = 3;
 	drawCoordMode();
 
@@ -485,7 +478,7 @@ void coordMode()
 			{
 				if (i <= 5) ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);
 
-				for(;i< 6 ; i++) {coordY[i] = '0';}
+				for(;i< 5 ; i++) {coordY[i] = '0';}
 
 				i = 0;
 				break;
@@ -532,10 +525,10 @@ void coordMode()
 			{
 				ssd1331_fill_rect(xRectCoord, yRectCoord,6,10,BLACK);
 
-				for(;i< 5 ; i++) {coordZ[i] = '0';}
+				for(;i< 6 ; i++) {coordZ[i] = '0';}
 
-				sprintf(buffer,"c,%s,%s,%s", coordX, coordY,coordZ);
-				HAL_UART_Transmit(&huart2, buffer, 21, 10);
+				sprintf(buffer,"c,%s,%s,%s,0000", coordX, coordY,coordZ);
+				HAL_UART_Transmit(&huart2, buffer, 26, 10);
 			}
 
 			//NEW
@@ -543,15 +536,12 @@ void coordMode()
 			{
 				ssd1331_fill_rect(16,15,36,12,BLACK);
 				ssd1331_fill_rect(64,15,36,12,BLACK);
-				ssd1331_fill_rect(42,27,36,12,BLACK);
+				ssd1331_fill_rect(42,27,42,12,BLACK);
 				break;
 			}
 		}
 	}
 	drawMenu();
-
-	sprintf(buffer,"x000000000000000000000");
-	HAL_UART_Transmit(&huart2, buffer, strlen((char*)buffer), 10);
 }
 
 
@@ -721,6 +711,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 				toggle = 1;
 			}
 	}
+
 	if(htim->Instance == TIM3)
 	{
 		flagaTIM3 = 1;
