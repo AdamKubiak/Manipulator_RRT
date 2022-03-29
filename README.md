@@ -15,3 +15,10 @@ dla operatora.
 
 ![](docs/img/manip_rel.jpg)
 ![](docs/img/pilot_rel.jpg)
+
+#Elektronika
+##Schematy wykonanej elektroniki
+##Pilot
+![](docs/img/pilot.png)
+##Manipulator
+![](docs/img/robot.png)
